@@ -38,30 +38,95 @@ class TaskFrame(ctk.CTkFrame):
         self.elapsed = elapsed
         self.last_update = 0
 
-        self.label = ctk.CTkLabel(self, text=self.name, width=150, anchor="w", font=("Arial", 14, "bold"))
-        self.label.pack(side="left", padx=15, pady=15)
+        # Pack les widgets fixes en PREMIER (côté droit) pour qu'ils gardent leur taille
+        self.archive_btn = ctk.CTkButton(self, text="Archiver", width=80, fg_color="#b8860b", hover_color="#8b6508", command=self.archive)
+        self.archive_btn.pack(side="right", padx=10, pady=15)
 
-        self.time_label = ctk.CTkLabel(self, text="00:00:00", width=80, font=("Consolas", 16))
-        self.time_label.pack(side="left", padx=10)
+        self.btn = ctk.CTkButton(self, text="Start", width=80, fg_color="#2FA572", hover_color="#106A43", command=self.toggle)
+        self.btn.pack(side="right", padx=5, pady=15)
 
         self.multiplier = ctk.StringVar(value=multiplier)
         self.mult_menu = ctk.CTkOptionMenu(
             self, 
-            values=["x0.5", "x0.75", "x1", "x2", "x3", "x4", "x5", "x10"], 
+            values=["x0.5", "x0.75", "x1", "x1.25", "x1.5", "x2", "x3", "x4", "x5", "x10"], 
             variable=self.multiplier, 
             width=75, 
             fg_color="#333333",
             button_color="#444444"
         )
-        self.mult_menu.pack(side="left", padx=10)
+        self.mult_menu.pack(side="right", padx=10)
 
-        self.archive_btn = ctk.CTkButton(self, text="Archiver", width=60, fg_color="#b8860b", hover_color="#8b6508", command=self.archive)
-        self.archive_btn.pack(side="right", padx=10)
+        self.time_label = ctk.CTkLabel(self, text="00:00:00", width=80, font=("Consolas", 16))
+        self.time_label.pack(side="right", padx=10)
 
-        self.btn = ctk.CTkButton(self, text="Start", width=60, fg_color="#2FA572", hover_color="#106A43", command=self.toggle)
-        self.btn.pack(side="right", padx=5)
-        
+        # Poignée de drag (≡) à gauche
+        self.drag_handle = ctk.CTkLabel(self, text="\u2261", font=("Arial", 20), width=20, cursor="fleur")
+        self.drag_handle.pack(side="left", padx=(10, 2), pady=15)
+
+        # Label prend l'espace restant — packé en DERNIER
+        self.label = ctk.CTkLabel(self, text=self.name, anchor="w", font=("Arial", 14, "bold"))
+        self.label.pack(side="left", padx=(5, 15), pady=15, fill="x", expand=True)
+
+        self.bind("<Configure>", self._clamp_label_width)
+        self._clamp_label_width()
+
+        # Drag & drop bindings
+        self.drag_handle.bind("<ButtonPress-1>", self._on_drag_start)
+        self.drag_handle.bind("<B1-Motion>", self._on_drag_motion)
+        self.drag_handle.bind("<ButtonRelease-1>", self._on_drag_end)
+
         self.update_display()
+
+    def _clamp_label_width(self, event=None):
+        reserved = 420
+        available = self.winfo_width() - reserved
+        max_chars = max(5, available // 8)
+        if len(self.name) > max_chars:
+            self.label.configure(text=self.name[:max_chars] + "\u2026")
+        else:
+            self.label.configure(text=self.name)
+
+    def _on_drag_start(self, event):
+        self.app_instance._drag_task = self
+        self.configure(border_color="#2FA572")
+
+    def _on_drag_motion(self, event):
+        app = self.app_instance
+        y = event.widget.winfo_rooty() + event.y
+        # Reset les bordures de tous les chronos
+        for task in app.tasks:
+            if task is not self:
+                task.configure(border_color="#444444")
+        # Trouve la position cible
+        target_idx = len(app.tasks)
+        for i, task in enumerate(app.tasks):
+            task_y = task.winfo_rooty()
+            task_h = task.winfo_height()
+            if y < task_y + task_h // 2:
+                target_idx = i
+                break
+        app._drag_target_index = target_idx
+        # Highlight la cible
+        if target_idx < len(app.tasks) and app.tasks[target_idx] is not self:
+            app.tasks[target_idx].configure(border_color="#2FA572")
+
+    def _on_drag_end(self, event):
+        self.configure(border_color="#444444")
+        app = self.app_instance
+        for task in app.tasks:
+            task.configure(border_color="#444444")
+        if hasattr(app, '_drag_task') and hasattr(app, '_drag_target_index'):
+            old_index = app.tasks.index(self)
+            new_index = app._drag_target_index
+            if new_index > old_index:
+                new_index -= 1
+            if old_index != new_index:
+                app.tasks.pop(old_index)
+                new_index = max(0, min(new_index, len(app.tasks)))
+                app.tasks.insert(new_index, self)
+                app._repack_tasks()
+            del app._drag_task
+            del app._drag_target_index
 
     def toggle(self):
         if self.is_running:
@@ -106,7 +171,7 @@ class App(ctk.CTk):
     def __init__(self):
         super().__init__()
         self.title("DenisChrono")
-        self.geometry("620x750") 
+        self.geometry("850x750") 
         
         # --- L'astuce mortelle : on force l'icône 200 millisecondes APRES l'ouverture ---
         self.after(200, self.force_icon)
@@ -192,6 +257,13 @@ class App(ctk.CTk):
             })
         self.tasks.remove(task)
         task.destroy()
+        self.save_data()
+
+    def _repack_tasks(self):
+        for task in self.tasks:
+            task.pack_forget()
+        for task in self.tasks:
+            task.pack(fill="x", pady=8)
         self.save_data()
 
     def open_folder(self):

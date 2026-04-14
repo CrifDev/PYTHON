@@ -1,0 +1,22 @@
+[
+    {
+        "name": "test",
+        "elapsed": 62.83743667602539,
+        "multiplier": "x1"
+    },
+    {
+        "name": "testtttttttttttttttttttttttttttttttttttttaaaaaaaaaaaaaaaa berrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrr",
+        "elapsed": 13.278454840183258,
+        "multiplier": "x1.25"
+    },
+    {
+        "name": "test2",
+        "elapsed": 75.95438927412033,
+        "multiplier": "x1.25"
+    },
+    {
+        "name": "test3",
+        "elapsed": 88.89322400093079,
+        "multiplier": "x1.5"
+    }
+]
